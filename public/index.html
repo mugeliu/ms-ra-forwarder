@@ -91,7 +91,7 @@
         <div class="row">
           <div class="col">
             <button id="previewButton" type="button" class="btn btn-secondary" onclick="preview()">测试</button>
-            <button type="button" class="btn btn-primary" onclick='createLegadoUrl()'>生成阅读（legado）语音引擎链接</button>
+            <button type="button" class="btn btn-primary" onclick='downloadAudio()'>下载音频</button>
           </div>
         </div>
     </form>
@@ -218,23 +218,46 @@
         });
     }
 
-    function createLegadoUrl() {
-      let name = document.getElementsByName('name')[0].value;
+    function downloadAudio() {
+      // let name = document.getElementsByName('name')[0].value;
+      let currentDate = new Date().toISOString().slice(0, 10);
+      let currentTime = new Date().toLocaleTimeString().replace(/:/g, '');
+      let randomCode = Math.random().toString(36).substring(2, 8);
+      let name = currentDate + "-" + currentTime + "-" + randomCode;
       let voiceName = document.getElementsByName('voiceName')[0].value;
       let voiceFormat = document.getElementsByName('voiceFormat')[0].value;
       let token = document.getElementsByName('token')[0].value;
       let previewText = document.getElementsByName('previewText')[0].value;
-      let url = window.location.protocol + '//' + window.location.host + '/api/legado?api=' + encodeURIComponent(window.location.protocol + '//' + window.location.host + '/api/ra')
-        + '&name=' + encodeURIComponent(name)
-        + '&voiceName=' + encodeURIComponent(voiceName)
-        + '&voiceFormat=' + encodeURIComponent(voiceFormat)
-        + '&token=' + encodeURIComponent(token);
-      let svg = new QRCode(url).svg();
-      let modal = new bootstrap.Modal(document.getElementById('legadoUrlModal'))
-      modal.show();
-      document.getElementById('legadoUrlQRCode').innerHTML = svg;
-      document.getElementById('legadoUrl').value = url;
-      document.getElementById('legadoImportButton').href = 'legado://import/httpTTS?src=' + encodeURIComponent(url);
+      let ssml = createSSML(previewText, voiceName);
+      
+      let headers = { 'Content-Type': 'text/plain' };
+      if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
+      }
+      headers['Format'] = voiceFormat;
+      
+      fetch('/api/ra', {
+        method: 'post',
+        headers: headers,
+        body: ssml
+      }).then(response => {
+        if (response.status == 200) {
+          return response.blob();
+        } else if (response.status == 401) {
+          throw '无效的密钥';
+        } else {
+          return response.text().then(text => Promise.reject(text));
+        }
+      }).then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name + '.' + voiceFormat.split('-').pop();
+        a.click();
+        URL.revokeObjectURL(url);
+      }).catch(reason => {
+        alert(reason);
+      });
     }
   </script>
 </body>
